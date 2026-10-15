@@ -276,9 +276,6 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
 
     API key (optional, but without one NVD allows only 5 requests per 30 seconds)
     -Request one at https://nvd.nist.gov/developers/request-an-api-key
-    -Save it as nvd.credentials.json next to the script, or ~\.nvd\credentials.json:
-        { "ApiKey": "your-nvd-key-here" }
-    -Or set $env:NVD_API_KEY
 
     Requirements
     -PowerShell 7 (tested); Windows PowerShell 5.1 should work but is untested
