@@ -11,11 +11,8 @@
 	piped on. Every other parameter is a search filter; filters combine, and at
 	least one is required. Rejected CVEs are left out unless -IncludeRejected.
 
-	The NVD API key is read from the secret NVD_API_KEY in the default
-	SecretManagement vault (if that module is installed), then from
-	nvd.credentials.json next to the script, then ~\.nvd\credentials.json, then
-	$env:NVD_API_KEY. The file looks like:
-	    { "ApiKey": "your-nvd-key-here" }
+	The NVD API key is read from the secret NVD_API_KEY in a SecretManagement
+	vault (Microsoft.PowerShell.SecretManagement), then from $env:NVD_API_KEY.
 	Without a key the script still works, at NVD's slower public rate limit.
 	Request a key at https://nvd.nist.gov/developers/request-an-api-key
 
@@ -234,42 +231,23 @@ $resolvedCweInfo = if ($CweInfo) { 'CWE-' + ($CweInfo -replace '^(?i)CWE-', '') 
 # Windows PowerShell 5.1 may default to older TLS versions that NVD and FIRST refuse.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# The API key is looked for in a SecretManagement vault first (only if that
-# module is installed), then next to the script, then in the home folder, then
-# in $env:NVD_API_KEY. NVD answers without a key too, only more slowly.
-# -CweInfo never calls NVD, so it skips the key entirely.
+# The API key is read from a SecretManagement vault, then from $env:NVD_API_KEY
+# (for unattended runs where the vault cannot be unlocked). NVD answers without
+# a key too, only more slowly. -CweInfo never calls NVD, so it skips the key.
 Set-Variable SECRET_NAME -Option Constant -Value 'NVD_API_KEY'
-$credentialsSearchPaths = @(
-	(Join-Path $PSScriptRoot 'nvd.credentials.json'),
-	(Join-Path $HOME '.nvd\credentials.json')
-)
 $apiKey = $null
 if (-not $CweInfo) {
 	if (Get-Command Get-Secret -ErrorAction SilentlyContinue) {
 		try {
-			$apiKey = Get-Secret -Name $SECRET_NAME -AsPlainText -ErrorAction Stop
-			Write-Verbose "NVD API key read from secret '$SECRET_NAME' in the default vault"
+			$secret = Get-Secret -Name $SECRET_NAME -AsPlainText -ErrorAction Stop
+			# A secret saved as a PSCredential comes back as one; its password is the key.
+			$apiKey = if ($secret -is [pscredential]) { $secret.GetNetworkCredential().Password } else { [string]$secret }
+			Write-Verbose "NVD API key read from secret '$SECRET_NAME'"
 		} catch {
-			Write-Verbose "No secret '$SECRET_NAME' in a SecretManagement vault: $($_.Exception.Message)"
+			Write-Verbose "Could not read secret '$SECRET_NAME': $($_.Exception.Message)"
 		}
-	}
-	$credentialsPath = if ($apiKey) { $null } else { $credentialsSearchPaths | Where-Object { [System.IO.File]::Exists($_) } | Select-Object -First 1 }
-	if ($credentialsPath) {
-		try {
-			$apiKey = (Get-Content -Path $credentialsPath -Raw | ConvertFrom-Json -ErrorAction Stop).ApiKey
-		} catch {
-			Write-Host "Could not read $credentialsPath - it is not valid JSON." -ForegroundColor Red
-			Write-Host 'It should look like: { "ApiKey": "your-nvd-key-here" }' -ForegroundColor Yellow
-			return
-		}
-		if ([string]::IsNullOrWhiteSpace($apiKey)) {
-			Write-Host "No 'ApiKey' field in $credentialsPath." -ForegroundColor Red
-			Write-Host 'It should look like: { "ApiKey": "your-nvd-key-here" }' -ForegroundColor Yellow
-			return
-		}
-	}
-	if ($credentialsPath) {
-		Write-Verbose "NVD API key read from $credentialsPath"
+	} else {
+		Write-Verbose 'Microsoft.PowerShell.SecretManagement is not installed; skipping the vault'
 	}
 	if ([string]::IsNullOrWhiteSpace($apiKey)) {
 		$apiKey = $env:NVD_API_KEY
@@ -278,7 +256,7 @@ if (-not $CweInfo) {
 		}
 	}
 	if ([string]::IsNullOrWhiteSpace($apiKey)) {
-		Write-Host "No NVD API key found. Looked in: secret '$SECRET_NAME', $($credentialsSearchPaths -join ', '), `$env:NVD_API_KEY" -ForegroundColor Yellow
+		Write-Host "No NVD API key found. Looked in: secret '$SECRET_NAME' (SecretManagement), `$env:NVD_API_KEY" -ForegroundColor Yellow
 		Write-Host "Running with the public rate limit (5 requests per 30 seconds)." -ForegroundColor Yellow
 	}
 }

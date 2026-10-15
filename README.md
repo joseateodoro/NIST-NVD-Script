@@ -276,17 +276,16 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
 
     API key (optional, but without one NVD allows only 5 requests per 30 seconds)
     -Request one at https://nvd.nist.gov/developers/request-an-api-key
-    -Recommended: store it encrypted with PowerShell SecretManagement (looked for first):
+    -Store it encrypted with PowerShell SecretManagement, as the secret NVD_API_KEY:
         Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
         Register-SecretVault -Name LocalStore -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault
         Set-Secret -Name NVD_API_KEY -Secret 'your-nvd-key-here'
-    -Or save it as nvd.credentials.json next to the script, or ~\.nvd\credentials.json:
-        { "ApiKey": "your-nvd-key-here" }
-    -Or set $env:NVD_API_KEY
+    -Or set $env:NVD_API_KEY (e.g. for scheduled runs, where the vault password cannot be entered)
+    -Run with -Verbose to see where the key was read from, or why the vault was skipped
 
     Requirements
     -PowerShell 7 (tested); Windows PowerShell 5.1 should work but is untested
-    -No extra PowerShell modules (SecretManagement is optional, for the API key)
+    -Microsoft.PowerShell.SecretManagement + SecretStore, only to store the API key
     -HTTPS access to services.nvd.nist.gov, api.first.org, cwe.mitre.org and cveawg.mitre.org (CVE.org)
 
     CWE catalog cache
