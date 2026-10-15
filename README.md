@@ -1,4 +1,4 @@
-# Get NVD Data
+# NVD Research Script
 
 This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) to search for CVEs, and adds the exploit likelihood (EPSS) from the [FIRST EPSS API](https://www.first.org/epss/api). Results are printed in the terminal: known exploited CVEs (CISA KEV) first, then the rest grouped by severity.
 
@@ -310,12 +310,6 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
 
     API key (optional, but without one NVD allows only 5 requests per 30 seconds)
     -Request one at https://nvd.nist.gov/developers/request-an-api-key
-    -Store it encrypted with PowerShell SecretManagement, as the secret NVD_API_KEY:
-        Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
-        Register-SecretVault -Name LocalStore -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault
-        Set-Secret -Name NVD_API_KEY -Secret 'your-nvd-key-here'
-    -Or set $env:NVD_API_KEY (e.g. for scheduled runs, where the vault password cannot be entered)
-    -Run with -Verbose to see where the key was read from, or why the vault was skipped
 
     Requirements
     -PowerShell 7 (tested); Windows PowerShell 5.1 should work but is untested
