@@ -1,4 +1,4 @@
-# Get NVD Data
+# NVD Research Script
 
 This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) to search for CVEs, and adds the exploit likelihood (EPSS) from the [FIRST EPSS API](https://www.first.org/epss/api). Results are printed in the terminal: known exploited CVEs (CISA KEV) first, then the rest grouped by severity.
 
