@@ -56,6 +56,50 @@
 	Only CVEs CISA added to the KEV list in the last 1-120 days, however old the
 	CVE itself is. Use this, not -KevOnly -Days, to see what newly became urgent.
 
+.PARAMETER Received
+	Only CVEs NVD has received but not yet triaged (status Received). Alias -R.
+	The status switches narrow a search and combine: -R -UA shows both. NVD's
+	API cannot filter on status, so the search runs as usual and the results
+	are filtered afterwards; add another filter, such as -Days, to keep it small.
+
+.PARAMETER AwaitingAnalysis
+	Only CVEs queued for NVD analysis (status Awaiting Analysis). Alias -AA.
+
+.PARAMETER UndergoingAnalysis
+	Only CVEs NVD is analysing now (status Undergoing Analysis). Alias -UA.
+
+.PARAMETER Analyzed
+	Only CVEs NVD has finished analysing (status Analyzed). Alias -AN.
+
+.PARAMETER Modified
+	Only CVEs changed since NVD analysed them (status Modified). Alias -M.
+
+.PARAMETER Deferred
+	Only CVEs NVD has decided not to analyse (status Deferred). Alias -D.
+
+.PARAMETER ExcludeReceived
+	Leaves out CVEs NVD has received but not yet triaged (status Received).
+	Alias -XR. Like the status switches, the exclude switches narrow a search,
+	need another filter, and combine with each other and the status switches.
+
+.PARAMETER ExcludeAwaitingAnalysis
+	Leaves out CVEs queued for NVD analysis (status Awaiting Analysis). Alias -XAA.
+
+.PARAMETER ExcludeUndergoingAnalysis
+	Leaves out CVEs NVD is analysing now (status Undergoing Analysis). Alias -XUA.
+
+.PARAMETER ExcludeModified
+	Leaves out CVEs changed since NVD analysed them (status Modified). Alias -XM.
+
+.PARAMETER ExcludeAnalyzed
+	Leaves out CVEs NVD has finished analysing (status Analyzed). Alias -XAN.
+	Like the status switches, it narrows a search and needs another filter.
+	Combines with them, e.g. -Days 7 -XAN -XD shows only what NVD has not
+	dealt with yet.
+
+.PARAMETER ExcludeDeferred
+	Leaves out CVEs NVD has decided not to analyse (status Deferred). Alias -XD.
+
 .PARAMETER IncludeRejected
 	Include CVEs NVD has rejected (withdrawn). They are left out by default.
 
@@ -120,6 +164,14 @@
 	.\Get-NVDData.ps1 -Keyword "remote code execution" -Days 7
 	CVEs from the last week whose description mentions remote code execution.
 
+.EXAMPLE
+	.\Get-NVDData.ps1 -Days 7 -R -UA
+	CVEs from the last week that NVD has received or is analysing now.
+
+.EXAMPLE
+	.\Get-NVDData.ps1 -Days 7 -XAN -XD
+	CVEs from the last week that NVD has neither analysed nor deferred.
+
 .LINK
 	https://nvd.nist.gov/developers
 
@@ -170,6 +222,66 @@ Param(
 	$KevAddedDays,
 
 	[Parameter(Mandatory=$false)]
+	[Alias('R')]
+	[Switch]
+	$Received,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('AA')]
+	[Switch]
+	$AwaitingAnalysis,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('UA')]
+	[Switch]
+	$UndergoingAnalysis,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('AN')]
+	[Switch]
+	$Analyzed,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('M')]
+	[Switch]
+	$Modified,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('D')]
+	[Switch]
+	$Deferred,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XR')]
+	[Switch]
+	$ExcludeReceived,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XAA')]
+	[Switch]
+	$ExcludeAwaitingAnalysis,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XUA')]
+	[Switch]
+	$ExcludeUndergoingAnalysis,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XAN')]
+	[Switch]
+	$ExcludeAnalyzed,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XM')]
+	[Switch]
+	$ExcludeModified,
+
+	[Parameter(Mandatory=$false)]
+	[Alias('XD')]
+	[Switch]
+	$ExcludeDeferred,
+
+	[Parameter(Mandatory=$false)]
 	[Switch]
 	$IncludeRejected,
 
@@ -192,6 +304,43 @@ Param(
 # Without a filter NVD would return its entire catalog of 300,000+ CVEs.
 $searchFilterGiven = $Keyword -or $Product -or $Cpe -or $Cwe -or $Severity -or $Days -or $KevOnly -or $KevAddedDays
 
+# The NVD analysis statuses asked for, as NVD spells them in vulnStatus. NVD's
+# API cannot filter on status, so these narrow a search's results afterwards.
+$statusSwitches = [ordered]@{
+	'Received'            = $Received
+	'Awaiting Analysis'   = $AwaitingAnalysis
+	'Undergoing Analysis' = $UndergoingAnalysis
+	'Analyzed'            = $Analyzed
+	'Modified'            = $Modified
+	'Deferred'            = $Deferred
+}
+$statusFilter = @($statusSwitches.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { $_.Key })
+
+# The statuses to leave out, applied after $statusFilter.
+$exclusionSwitches = [ordered]@{
+	'Received'            = $ExcludeReceived
+	'Awaiting Analysis'   = $ExcludeAwaitingAnalysis
+	'Undergoing Analysis' = $ExcludeUndergoingAnalysis
+	'Analyzed'            = $ExcludeAnalyzed
+	'Modified'            = $ExcludeModified
+	'Deferred'            = $ExcludeDeferred
+}
+$statusExclusions = @($exclusionSwitches.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { $_.Key })
+$statusFilterGiven = $statusFilter -or $statusExclusions
+
+# A status alone would fetch NVD's entire catalog only to filter it.
+if ($statusFilterGiven -and -not ($CveId -or $CweInfo -or $searchFilterGiven)) {
+	Write-Host "The status switches (-R, -AA, -UA, -AN, -M, -D and their -X exclude forms) narrow a search and need another filter." -ForegroundColor Red
+	Write-Host "For example: .\Get-NVDData.ps1 -Days 7 -R -UA" -ForegroundColor Yellow
+	return
+}
+
+$conflicts = @($statusFilter | Where-Object { $_ -in $statusExclusions })
+if ($conflicts) {
+	Write-Host "Status $($conflicts -join ' and ') is both asked for and excluded; use one or the other." -ForegroundColor Red
+	return
+}
+
 if (-not ($CveId -or $searchFilterGiven -or $CweInfo)) {
 	Write-Host "No filter provided." -ForegroundColor Red
 	Write-Host "Use -CveId, -CweInfo, or search with -Keyword, -Product, -Cpe, -Cwe, -Severity, -Days, -KevOnly and/or -KevAddedDays." -ForegroundColor Yellow
@@ -200,12 +349,12 @@ if (-not ($CveId -or $searchFilterGiven -or $CweInfo)) {
 }
 
 # -CweInfo reads MITRE's catalog and never calls NVD, so it stands alone.
-if ($CweInfo -and ($CveId -or $searchFilterGiven -or $IncludeRejected -or $CweSummary)) {
+if ($CweInfo -and ($CveId -or $searchFilterGiven -or $statusFilterGiven -or $IncludeRejected -or $CweSummary)) {
 	Write-Host "-CweInfo describes one CWE on its own and cannot be combined with other parameters." -ForegroundColor Red
 	return
 }
 
-if ($CveId -and ($searchFilterGiven -or $IncludeRejected -or $CweSummary)) {
+if ($CveId -and ($searchFilterGiven -or $statusFilterGiven -or $IncludeRejected -or $CweSummary)) {
 	Write-Host "-CveId looks CVEs up directly and cannot be combined with the search filters." -ForegroundColor Red
 	return
 }
@@ -482,6 +631,8 @@ function Format-SearchDescription($CpeFilter) {
 	if ($Days)            { $parts += "published in the last $Days day(s)" }
 	if ($KevOnly)         { $parts += "known exploited only" }
 	if ($KevAddedDays)    { $parts += "added to CISA KEV in the last $KevAddedDays day(s)" }
+	if ($statusFilter)    { $parts += "status $($statusFilter -join ' or ')" }
+	if ($statusExclusions) { $parts += "excluding status $($statusExclusions -join ' and ')" }
 	if ($IncludeRejected) { $parts += "rejected CVEs included" }
 	return ($parts -join ', ')
 }
@@ -1269,7 +1420,7 @@ function Format-TableCell($Value, $Heading) {
 # Renders one section of the results as a plain-text table. The KEV columns
 # are only shown in the known-exploited section, where they are filled in.
 # Patch links are too long for a table column and follow it as a list instead.
-function Format-ResultsTable($Rows, $IncludeKev) {
+function Format-ResultsTable($Rows, $IncludeKev, $IncludeStatus) {
 	if (-not $Rows) {
 		return "    (none)"
 	}
@@ -1282,6 +1433,10 @@ function Format-ResultsTable($Rows, $IncludeKev) {
 		@{ Name = 'EPSS';      Expression = { Format-TableCell (Format-Epss $_.'EPSS') 'EPSS' } },
 		@{ Name = 'CWE';       Expression = { Format-TableCell $_.'CWE' 'CWE' } }
 	)
+
+	if ($IncludeStatus) {
+		$columns += @{ Name = 'Status'; Expression = { Format-TableCell $_.'Status' 'Status' } }
+	}
 
 	if ($IncludeKev) {
 		$columns += @{ Name = 'KEV Added'; Expression = { Format-TableCell $_.'KEV Added' 'KEV Added' } }
@@ -1335,7 +1490,7 @@ function Show-CveResults($Rows, $SearchDescription, $CweNames) {
 	Write-Host ""
 
 	Write-Host "=== Known exploited - CISA KEV ($($exploited.Count)) ===" -ForegroundColor Red
-	Write-Host (Format-ResultsTable $exploited $true)
+	Write-Host (Format-ResultsTable $exploited $true ([bool]$statusFilterGiven))
 	Write-Host ""
 
 	# -KevOnly asks for the KEV table alone: the severity sections and the CWE
@@ -1346,7 +1501,7 @@ function Show-CveResults($Rows, $SearchDescription, $CweNames) {
 				continue
 			}
 			Write-Host "=== $($section.Key) ($($section.Value.Count)) ===" -ForegroundColor Cyan
-			Write-Host (Format-ResultsTable $section.Value $false)
+			Write-Host (Format-ResultsTable $section.Value $false ([bool]$statusFilterGiven))
 			Write-Host ""
 		}
 	}
@@ -1392,6 +1547,12 @@ try {
 		$results = @(Get-CvesById $resolvedIds)
 	} else {
 		$results = @(Search-Cves (Get-SearchQuery $cpeFilter))
+		if ($statusFilter) {
+			$results = @($results | Where-Object { $_.Status -in $statusFilter })
+		}
+		if ($statusExclusions) {
+			$results = @($results | Where-Object { $_.Status -notin $statusExclusions })
+		}
 	}
 } catch {
 	Write-Host "Failed to query the NVD CVE API: $($_.Exception.Message)" -ForegroundColor Red

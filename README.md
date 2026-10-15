@@ -13,7 +13,7 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
 
     Get-NVDData.ps1 [-CveId cve[,cve...]] [-PassThru]
     Get-NVDData.ps1 [-CweInfo id]
-    Get-NVDData.ps1 [-Keyword text] [-Product name | -Cpe cpe] [-Cwe id] [-Severity level] [-Days n] [-KevOnly] [-KevAddedDays n] [-IncludeRejected] [-CweSummary]
+    Get-NVDData.ps1 [-Keyword text] [-Product name | -Cpe cpe] [-Cwe id] [-Severity level] [-Days n] [-KevOnly] [-KevAddedDays n] [-R] [-AA] [-UA] [-AN] [-M] [-D] [-XR] [-XAA] [-XUA] [-XAN] [-XM] [-XD] [-IncludeRejected] [-CweSummary]
 
 ## FEATURES
 
@@ -56,6 +56,11 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
 
     Product lookup
         -Product turns a plain name such as log4j into NVD's product ID (CPE) and searches every version.
+
+    Analysis status filter
+        -R, -AA, -UA, -AN, -M and -D narrow a search to CVEs with that NVD analysis status, e.g. only the
+        ones NVD has received but not yet analysed. Combine them to see several; a Status column is added.
+        Their -X forms (-XR, -XAA, -XUA, -XAN, -XM, -XD) do the opposite, leaving that status out.
 
     Rejected CVEs hidden
         CVEs NVD has withdrawn are left out of searches unless -IncludeRejected is given.
@@ -181,6 +186,33 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
         .\Get-NVDData.ps1 -KevAddedDays 10 -KevOnly        # the KEV table only
         .\Get-NVDData.ps1 -KevAddedDays 30 -Severity CRITICAL
 
+    -Received (-R), -AwaitingAnalysis (-AA), -UndergoingAnalysis (-UA), -Analyzed (-AN), -Modified (-M), -Deferred (-D)
+        Only CVEs with this NVD analysis status. Several can be given; a CVE with any of them is shown,
+        and the tables gain a Status column. They narrow a search, so another filter (such as -Days) is
+        needed, and they cannot be used with -CveId or -CweInfo. NVD's API has no status filter, so the
+        search runs as usual and the results are filtered afterwards.
+
+            -R    Received              NVD has the CVE but has not triaged it yet
+            -AA   Awaiting Analysis     queued for NVD analysis
+            -UA   Undergoing Analysis   NVD is analysing it now
+            -AN   Analyzed              NVD has added its CVSS, CWE and affected configurations
+            -M    Modified              changed since NVD analysed it
+            -D    Deferred              NVD has decided not to analyse it
+
+        .\Get-NVDData.ps1 -Days 7 -R                     # received this week, not yet analysed
+        .\Get-NVDData.ps1 -Days 2 -Severity CRITICAL -R -UA
+
+    -ExcludeReceived (-XR), -ExcludeAwaitingAnalysis (-XAA), -ExcludeUndergoingAnalysis (-XUA),
+    -ExcludeAnalyzed (-XAN), -ExcludeModified (-XM), -ExcludeDeferred (-XD)
+        Leave out CVEs with that status. Each works on its own or together, and they
+        combine with the status switches above. Like those, they narrow a search, so another filter is
+        needed. Asking for a status and excluding it at once (-AN -XAN) is an error.
+
+        .\Get-NVDData.ps1 -Days 7 -XAN                   # everything NVD has not analysed yet
+        .\Get-NVDData.ps1 -Days 7 -XAN -XD               # ... and also not deferred
+        .\Get-NVDData.ps1 -Product log4j -XD
+        .\Get-NVDData.ps1 -Days 7 -XR -XM                # skip untriaged and re-modified CVEs
+
     -IncludeRejected
         Include CVEs NVD has rejected (withdrawn). Left out by default.
 
@@ -271,6 +303,8 @@ This PowerShell script uses the [NIST NVD API](https://nvd.nist.gov/developers) 
     Exploited flaws of one weakness type .\Get-NVDData.ps1 -Cwe 502 -KevOnly
     Weakness profile of a product        .\Get-NVDData.ps1 -Product log4j -CweSummary
     How to prevent a weakness            .\Get-NVDData.ps1 -CweInfo 502
+    Not yet analysed by NVD this week    .\Get-NVDData.ps1 -Days 7 -R -AA -UA
+    Still open at NVD this week          .\Get-NVDData.ps1 -Days 7 -XAN -XD
 
 ## NOTES
 
